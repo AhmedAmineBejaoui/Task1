@@ -19,36 +19,62 @@ const bytesToMB = (bytes) => {
 };
 
 const getSystemInfo = () => {
-  return {
-    os: `${os.type()} ${os.release()}`,
-    cpu: `${os.cpus()[0].model} (${os.arch()})`,
-    totalMemory: bytesToMB(os.totalmem()),
-    freeMemory: bytesToMB(os.freemem()),
-    workingDirectory: process.cwd(),
-    hostname: os.hostname(),
-    platformVersion: os.version(),
-    systemUptime: `${(os.uptime() / 3600).toFixed(2)} heures`,
-    cpuCores: os.cpus().length,
-    userInfo: os.userInfo().username,
-    networkInterfaces: Object.keys(os.networkInterfaces()).join(", "),
-    nodeVersion: process.version,
-    launchArguments: process.argv.join(" "),
-  };
+  try {
+    return {
+      os: `${os.type()} ${os.release()}`,
+      cpu: os.cpus().length > 0 ? `${os.cpus()[0].model} (${os.arch()})` : "Inconnu",
+      totalMemory: bytesToMB(os.totalmem()),
+      freeMemory: bytesToMB(os.freemem()),
+      workingDirectory: process.cwd(),
+      hostname: os.hostname(),
+      platformVersion: os.version ? os.version() : "Inconnu",
+      systemUptime: `${(os.uptime() / 3600).toFixed(2)} heures`,
+      cpuCores: os.cpus().length,
+      userInfo: os.userInfo().username || "Inconnu",
+      networkInterfaces: Object.keys(os.networkInterfaces() || {}).join(", ") || "Inconnu",
+      nodeVersion: process.version,
+      launchArguments: process.argv.join(" "),
+    };
+  } catch (error) {
+    console.error("Erreur lors de la récupération des informations système:", error);
+    return {};
+  }
 };
 
 const encryptPassword = (password) => {
-  const secretKey = "MaCleSecrete2004";
-  return CryptoJS.AES.encrypt(password, secretKey).toString();
+  try {
+    const secretKey = "MaCleSecrete2004";
+    return CryptoJS.AES.encrypt(password, secretKey).toString();
+  } catch (error) {
+    console.error("Erreur lors du chiffrement du mot de passe:", error);
+    return "Erreur de chiffrement";
+  }
 };
 
-rl.question("Entrez le nom d'utilisateur : ", (username) => {
-  rl.question("Entrez le mot de passe : ", (password) => {
+const askQuestion = (query) => {
+  return new Promise((resolve) => {
+    rl.question(query, (answer) => {
+      resolve(answer.trim());
+    });
+  });
+};
+
+(async () => {
+  try {
+    const username = await askQuestion("Entrez le nom d'utilisateur : ");
+    const password = await askQuestion("Entrez le mot de passe : ");
+    rl.close();
+    
+    if (!username || !password) {
+      throw new Error("Le nom d'utilisateur et le mot de passe ne peuvent pas être vides.");
+    }
+
     const encryptedPassword = encryptPassword(password);
     const systemInfo = getSystemInfo();
     const filename = getFilename();
 
     const fileContent = `
-=== Fichier de configuration securise ===
+=== Fichier de configuration sécurisé ===
 Date de création: ${new Date().toISOString()}
 Nom d'utilisateur: ${username}
 Mot de passe chiffré: ${encryptedPassword}
@@ -59,7 +85,7 @@ Version OS: ${systemInfo.platformVersion}
 Hostname: ${systemInfo.hostname}
 CPU: ${systemInfo.cpu}
 Coeurs CPU: ${systemInfo.cpuCores}
-Architecture: ${systemInfo.cpu.split("(")[1].replace(")", "")}
+Architecture: ${systemInfo.cpu.split("(")[1]?.replace(")", "") || "Inconnu"}
 Mémoire totale: ${systemInfo.totalMemory}
 Mémoire libre: ${systemInfo.freeMemory}
 Uptime système: ${systemInfo.systemUptime}
@@ -71,9 +97,15 @@ Arguments de lancement: ${systemInfo.launchArguments}
 `;
 
     fs.writeFile(filename, fileContent.trim(), (err) => {
-      if (err) throw err;
-      console.log(`Fichier ${filename} créé avec succès!`);
-      rl.close();
+      if (err) {
+        console.error("Erreur lors de l'écriture du fichier:", err);
+      } else {
+        console.log(`Fichier ${filename} créé avec succès!`);
+      }
     });
-  });
-});
+  } catch (error) {
+    console.error("Une erreur est survenue:", error.message);
+    rl.close();
+  }
+})();
+
